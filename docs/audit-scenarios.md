@@ -178,7 +178,7 @@ Comparison is by **setting**, not by check. Each failure is identified by the ex
 | ✅ Passes setting X | ⚠️ Fails setting X | **Not in baseline** — shown as "not in baseline" and sets the LB to ⚠️ |
 | ✅ Passes | ✅ Passes | **Passed** — both comply |
 
-Because matching is per setting, a check with several sub-settings can land in more than one row. For example, if the reference LB has L7 DDoS protection configured with the wrong mitigation, but the target has no L7 DDoS protection at all, the two failures are on different fields and the target still gets a warning. To clear a "not in baseline" result, bring the reference LB up to the target's level.
+Because matching is per setting, a check with several sub-settings can land in more than one row. For example, if the reference LB's L7 DDoS protection uses a JS challenge instead of blocking, and the target's uses a custom DDoS policy, the two failures are on different fields and the target still gets a warning. (An LB with no L7 DDoS block set uses XC's platform default, which blocks, so it passes this check.) To clear a "not in baseline" result, bring the reference LB up to the target's level.
 
 ---
 

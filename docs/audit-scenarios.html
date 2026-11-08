@@ -218,7 +218,7 @@ flowchart TD
 <tr><td style="text-align:center">✅ Passes</td><td style="text-align:center">✅ Passes</td><td><strong>Passed</strong> — both comply</td></tr>
 </tbody>
 </table>
-<p>Because matching is per setting, a check with several sub-settings can land in more than one row. For example, if the reference LB has L7 DDoS protection configured with the wrong mitigation, but the target has no L7 DDoS protection at all, the two failures are on different fields and the target still gets a warning. To clear a "not in baseline" result, bring the reference LB up to the target's level.</p>
+<p>Because matching is per setting, a check with several sub-settings can land in more than one row. For example, if the reference LB's L7 DDoS protection uses a JS challenge instead of blocking, and the target's uses a custom DDoS policy, the two failures are on different fields and the target still gets a warning. (An LB with no L7 DDoS block set uses XC's platform default, which blocks, so it passes this check.) To clear a "not in baseline" result, bring the reference LB up to the target's level.</p>
 
 <hr>
 
