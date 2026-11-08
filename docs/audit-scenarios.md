@@ -69,7 +69,7 @@ flowchart TD
 
 ## Scenario 2: Baseline LB Override
 
-A reference LB in the **default** namespace serves as a "known-good" configuration. Other LBs are compared against it — shared gaps are suppressed, and improvements are flagged.
+A reference LB in the **default** namespace serves as a "known-good" configuration. Other LBs are compared against it field by field — a gap the reference LB shares on the exact same setting is suppressed, and a check the target passes but the reference fails is flagged as "not in baseline" (which turns the target's badge to ⚠️).
 
 ```mermaid
 flowchart LR
@@ -83,9 +83,9 @@ flowchart LR
 
     subgraph Audit["Audit Comparison"]
         direction TB
-        BothFail["Both fail DDoS?\n→ Suppressed (via baseline)"]
+        BothFail["Both fail the same\nDDoS setting?\n→ Suppressed (via baseline)"]
         OnlyTarget["Only target fails WAF?\n→ ⚠️ Warning"]
-        OnlyBaseline["Target passes but\nbaseline fails API Discovery?\n→ ℹ️ Not in baseline"]
+        OnlyBaseline["Target passes but\nbaseline fails API Discovery?\n→ ⚠️ Not in baseline"]
     end
 
     RefLB -->|"audited against\nsame baseline"| Audit
@@ -102,18 +102,18 @@ flowchart LR
 flowchart TD
     subgraph Report["Report Output for app-production"]
         direction TB
-        Header["⚠️ app-production (baseline: baseline-standard)\n6 passed, 1 warning, 2 via baseline, 1 not in baseline"]
+        Header["⚠️ app-production  [ref: baseline-standard]\n(8 passed, 1 warnings, 1 not in baseline)"]
 
         subgraph Active["Active Warnings"]
             W1["⚠️ WAF Blocking Mode — expected: Block, found: Monitor"]
         end
 
-        subgraph Via["Suppressed (Via Baseline)"]
+        subgraph Via["Suppressed — counted in passed"]
             V1["✅ DDoS Mitigation Rules — via baseline-standard"]
             V2["✅ L7 DDoS Protection — via baseline-standard"]
         end
 
-        subgraph NIB["Flagged Differences"]
+        subgraph NIB["Not in Baseline — sets LB to ⚠️"]
             N1["ℹ️ API Discovery — not in baseline"]
         end
     end
@@ -134,7 +134,11 @@ flowchart TD
 
 Create an HTTP Load Balancer in the **default** namespace that represents your approved configuration (e.g., `baseline-standard`). This LB doesn't need to serve traffic — it's just a configuration template.
 
-#### Step 2 — Add the Label to Target LBs
+#### Step 2 — Register the Audit Labels (once per tenant)
+
+XC only accepts label keys that are registered as known labels. With an XC console tab open, go to the extension's **Options → Exemption Map** and click **Register Labels in XC**. This registers every `xc-audit-*` key in the `shared` namespace. Skip this step if it has already been done for the tenant.
+
+#### Step 3 — Add the Label to Target LBs
 
 In the XC Console, navigate to your target LB:
 
@@ -144,6 +148,8 @@ In the XC Console, navigate to your target LB:
    - **Key:** `xc-audit-baseline-lb`
    - **Value:** the name of your reference LB (e.g., `baseline-standard`)
 4. **Save and Exit**
+
+The value must exactly match the name of an LB in the **default** namespace. If it doesn't (a typo, or the reference LB is in another namespace or was deleted), the label is silently ignored and the LB gets a standard audit. To confirm the override took effect, check that the LB's badge shows a **ref: baseline-standard** tag.
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -163,12 +169,16 @@ In the XC Console, navigate to your target LB:
 
 #### How It Works
 
+Comparison is by **setting**, not by check. Each failure is identified by the exact field that differs from the security baseline (e.g., `spec.l7_ddos_protection.mitigation_block`), and the target's failure is only suppressed when the reference LB fails on that same field. Inspector checks (WAF blocking, IP reputation, geo policy, …) are compared per inspector.
+
 | Current LB | Baseline LB | Result |
 |:---:|:---:|---|
-| ⚠️ Fails | ⚠️ Fails | **Suppressed** — shown as "via baseline-standard" |
-| ⚠️ Fails | ✅ Passes | **Warning** — LB is worse than baseline |
-| ✅ Passes | ⚠️ Fails | **Flagged** — shown as "not in baseline" |
+| ⚠️ Fails setting X | ⚠️ Fails setting X | **Suppressed** — counted as passed, shown as "via baseline-standard" |
+| ⚠️ Fails setting X | ✅ Passes, or fails a different setting | **Warning** — LB differs from baseline |
+| ✅ Passes setting X | ⚠️ Fails setting X | **Not in baseline** — shown as "not in baseline" and sets the LB to ⚠️ |
 | ✅ Passes | ✅ Passes | **Passed** — both comply |
+
+Because matching is per setting, a check with several sub-settings can land in more than one row. For example, if the reference LB's L7 DDoS protection uses a JS challenge instead of blocking, and the target's uses a custom DDoS policy, the two failures are on different fields and the target still gets a warning. (An LB with no L7 DDoS block set uses XC's platform default, which blocks, so it passes this check.) To clear a "not in baseline" result, bring the reference LB up to the target's level.
 
 ---
 
@@ -184,14 +194,14 @@ flowchart LR
 
     subgraph Audit["Audit Processing"]
         direction TB
-        Full["Full Baseline\n15 checks"]
-        Filter["Remove exempt checks:\n- Bot Defense\n- API Discovery"]
-        Reduced["Filtered Baseline\n13 checks"]
+        Full["Full Baseline\n(all check settings)"]
+        Filter["Remove settings mapped to\nignore-bot and ignore-apid"]
+        Reduced["Filtered Baseline"]
     end
 
     subgraph Result["Report Output"]
         Active["Active Checks\n8 passed, 2 warnings"]
-        Skipped["Skipped Checks\n~~Bot Defense — Ignored~~\n~~API Discovery — Ignored~~"]
+        Skipped["Skipped Checks\nBot Defense — Ignored by Label\nAPI Discovery — Ignored by Label"]
     end
 
     LB --> Full
@@ -211,7 +221,7 @@ flowchart LR
 flowchart TD
     subgraph Report["Report Output for marketing-site"]
         direction TB
-        Header["⚠️ marketing-site\n8 passed, 2 warnings, 2 skipped"]
+        Header["⚠️ marketing-site\n(8 passed, 2 warnings, 2 skipped)"]
 
         subgraph Warnings["Active Warnings"]
             W1["⚠️ TLS — missing"]
@@ -225,8 +235,8 @@ flowchart TD
         end
 
         subgraph Skip["Skipped (Ignored by Label)"]
-            S1["~~Bot Defense — Ignored~~"]
-            S2["~~API Discovery — Ignored~~"]
+            S1["Bot Defense — Ignored by Label"]
+            S2["API Discovery — Ignored by Label"]
         end
     end
 
@@ -262,7 +272,13 @@ flowchart TD
 | `xc-audit-ignore-sp` | Service Policies | Policy & Data |
 | `xc-audit-ignore-sdp` | Sensitive Data Policy | Policy & Data |
 
-#### Step 2 — Add Labels to the LB
+Some labels cover more than one check. `xc-audit-ignore-waf` alone skips 5 (App Firewall plus four WAF inspections), and `xc-audit-ignore-ddos` and `xc-audit-ignore-apip` skip 2 each. Each skipped check is counted separately in the badge's "skipped" total.
+
+#### Step 2 — Register the Audit Labels (once per tenant)
+
+XC only accepts label keys that are registered as known labels. With an XC console tab open, go to the extension's **Options → Exemption Map** and click **Register Labels in XC**. Skip this step if it has already been done for the tenant.
+
+#### Step 3 — Add Labels to the LB
 
 In the XC Console, navigate to your target LB:
 
