@@ -2,6 +2,25 @@ function isPlainObject(val) {
   return val !== null && typeof val === 'object' && !Array.isArray(val);
 }
 
+// Settings XC applies when the LB spec leaves them unset. An unset field is
+// the platform default, not a missing feature, so audit it as that default.
+const PLATFORM_DEFAULTS = {
+  l7_ddos_protection: {
+    mitigation_block: {},
+    default_rps_threshold: {},
+    clientside_action_none: {},
+    ddos_policy_none: {},
+  },
+};
+
+function withPlatformDefaults(spec) {
+  const result = { ...spec };
+  for (const [key, val] of Object.entries(PLATFORM_DEFAULTS)) {
+    if (result[key] == null) result[key] = val;
+  }
+  return result;
+}
+
 export function findDiffs(current, baseline, path = 'spec') {
   const issues = [];
 
@@ -318,7 +337,7 @@ function runInspectionsForLb(lb, namespace, referencedObjects, inspectorBaseline
   return inspections;
 }
 
-export function comparePolicies(currentPolicies, baselinePolicies) {
+export function comparePolicies(currentPolicies, baselinePolicies, baselineSource) {
   const currentList = currentPolicies?.service_policies || [];
   const baselineList = baselinePolicies?.service_policies || [];
 
@@ -326,10 +345,16 @@ export function comparePolicies(currentPolicies, baselinePolicies) {
   const currentKeys = new Set(currentList.map(toKey));
   const baselineKeys = new Set(baselineList.map(toKey));
 
-  const match = currentKeys.size === baselineKeys.size &&
-    [...currentKeys].every((k) => baselineKeys.has(k));
+  const missing = [...baselineKeys].filter((k) => !currentKeys.has(k));
+  const extra = [...currentKeys].filter((k) => !baselineKeys.has(k));
+  const match = missing.length === 0 && extra.length === 0;
 
-  return { match };
+  const explanation = match ? null : {
+    reason: `This namespace's active service policies don't match the ${baselineSource}, so its traffic isn't filtered by the same rules.`,
+    next_step: `Activate the same service policies in this namespace, or save this namespace's policies as its baseline if the difference is intended.`,
+  };
+
+  return { match, missing, extra, baselineSource, explanation };
 }
 
 export function runFullAudit(lbConfigs, policyConfig, baseline, explanations, exemptionMap, referencedObjects) {
@@ -354,7 +379,7 @@ export function runFullAudit(lbConfigs, policyConfig, baseline, explanations, ex
       for (const [k, v] of Object.entries(filteredSpec)) {
         if (!k.startsWith('__inspector__')) diffSpec[k] = v;
       }
-      const currentSpec = lb.spec || {};
+      const currentSpec = withPlatformDefaults(lb.spec || {});
       const diffs = findDiffs(currentSpec, diffSpec, 'spec');
 
       const skippedKeys = new Set(skipped.map((s) => s.key));
@@ -460,6 +485,13 @@ export function groupByCategory(lbResult, categories) {
   );
 }
 
+function notInBaselineExplanation(baselineLbName) {
+  return {
+    reason: `This load balancer passes this check, but its reference LB ${baselineLbName} fails it, so the reference no longer reflects this configuration.`,
+    next_step: `Update ${baselineLbName} to match, or remove the xc-audit-baseline-lb label to audit this LB against the full baseline.`,
+  };
+}
+
 export function applyBaselineLbOverrides(results, lbConfigs, baselineLbConfigs, baselineLbReferencedObjects, baseline, explanations, defaultPolicies) {
   const inspectorBaselines = baseline.inspector_baselines || {};
   const lbBaseSpec = baseline.lb_baseline?.spec || {};
@@ -477,7 +509,7 @@ export function applyBaselineLbOverrides(results, lbConfigs, baselineLbConfigs, 
     const blb = baselineLbConfigs[baselineLbName];
     if (!blb) return null;
 
-    const blbSpec = blb.spec || {};
+    const blbSpec = withPlatformDefaults(blb.spec || {});
     const blbDiffs = findDiffs(blbSpec, diffSpec, 'spec');
     const failedPaths = new Set(blbDiffs.map((d) => d.path));
 
@@ -541,7 +573,7 @@ export function applyBaselineLbOverrides(results, lbConfigs, baselineLbConfigs, 
     const remainingPassed = [];
     for (const p of lbResult.passed) {
       if (blbAudit.failedPaths.has(p.path || `spec.${p.key}`) && !overriddenKeys.has(p.key)) {
-        lbResult.baselineOverrides.push({ ...p, overrideStatus: 'not_in_baseline' });
+        lbResult.baselineOverrides.push({ ...p, overrideStatus: 'not_in_baseline', explanation: notInBaselineExplanation(baselineLbName) });
       } else {
         remainingPassed.push(p);
       }
@@ -551,7 +583,7 @@ export function applyBaselineLbOverrides(results, lbConfigs, baselineLbConfigs, 
     const finalInspections = [];
     for (const insp of lbResult.inspections) {
       if (insp.pass && blbAudit.failedInspectors.has(insp.inspector)) {
-        lbResult.baselineOverrides.push({ ...insp, overrideStatus: 'not_in_baseline' });
+        lbResult.baselineOverrides.push({ ...insp, overrideStatus: 'not_in_baseline', explanation: notInBaselineExplanation(baselineLbName) });
       } else {
         finalInspections.push(insp);
       }

@@ -118,6 +118,27 @@ resource "volterra_http_loadbalancer" "s4_partner_api" {
     validation_disabled = true
   }
 
+  # JWT Validation in report mode so demo traffic without tokens still flows
+  jwt_validation {
+    action {
+      report = true
+    }
+    jwks_config {
+      cleartext = local.demo_jwks
+    }
+    target {
+      all_endpoint = true
+    }
+    token_location {
+      bearer_token = true
+    }
+    reserved_claims {
+      issuer_disable         = true
+      audience_disable       = true
+      validate_period_enable = true
+    }
+  }
+
   # No DDoS protection
   disable_bot_defense         = true
   disable_client_side_defense = true

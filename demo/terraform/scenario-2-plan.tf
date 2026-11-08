@@ -63,6 +63,27 @@ resource "volterra_http_loadbalancer" "s2_enterprise_ready" {
     validation_disabled = true
   }
 
+  # JWT Validation in report mode so demo traffic without tokens still flows
+  jwt_validation {
+    action {
+      report = true
+    }
+    jwks_config {
+      cleartext = local.demo_jwks
+    }
+    target {
+      all_endpoint = true
+    }
+    token_location {
+      bearer_token = true
+    }
+    reserved_claims {
+      issuer_disable         = true
+      audience_disable       = true
+      validate_period_enable = true
+    }
+  }
+
   # Bot Defense
   bot_defense {
     policy {
@@ -172,6 +193,27 @@ resource "volterra_http_loadbalancer" "s2_essentials_only" {
       namespace = var.shared_namespace
     }
     validation_disabled = true
+  }
+
+  # JWT Validation in report mode so demo traffic without tokens still flows
+  jwt_validation {
+    action {
+      report = true
+    }
+    jwks_config {
+      cleartext = local.demo_jwks
+    }
+    target {
+      all_endpoint = true
+    }
+    token_location {
+      bearer_token = true
+    }
+    reserved_claims {
+      issuer_disable         = true
+      audience_disable       = true
+      validate_period_enable = true
+    }
   }
 
   # Enterprise/add-on features intentionally disabled

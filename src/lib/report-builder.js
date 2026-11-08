@@ -424,7 +424,9 @@ function buildLbHtml(result, checkCategories) {
         const tag = planTagLabel(o.plan || check?.plan);
         html += `<span class="tag tag-unavail">${escapeHtml(label)} &mdash; ${tag}</span>`;
       } else if (o.overrideStatus === 'not_in_baseline') {
-        html += `<span class="tag tag-info">${escapeHtml(label)} &mdash; not in baseline</span>`;
+        html += `<div class="finding finding-rec">${escapeHtml(label)} &mdash; not in baseline`;
+        if (o.explanation) html += `<div class="finding-reason">${escapeHtml(o.explanation.reason)}</div>`;
+        html += `</div>`;
       } else {
         html += `<span class="tag tag-pass">${escapeHtml(label)} &mdash; via ${escapeHtml(result.baselineLb)}</span>`;
       }
@@ -453,7 +455,11 @@ function buildLbHtml(result, checkCategories) {
       if (cmp.match) {
         html += `<span class="tag tag-pass">Active service policies match ${escapeHtml(cmp.baselineSource)}</span>`;
       } else {
-        html += `<span class="tag tag-info">Active service policies differ from ${escapeHtml(cmp.baselineSource)}</span>`;
+        html += `<div class="finding finding-rec">Active service policies differ from ${escapeHtml(cmp.baselineSource)}`;
+        if (cmp.missing?.length) html += `<div>Missing: ${cmp.missing.map((k) => `<code>${escapeHtml(k)}</code>`).join(', ')}</div>`;
+        if (cmp.extra?.length) html += `<div>Not in ${escapeHtml(cmp.baselineSource)}: ${cmp.extra.map((k) => `<code>${escapeHtml(k)}</code>`).join(', ')}</div>`;
+        if (cmp.explanation) html += `<div class="finding-reason">${escapeHtml(cmp.explanation.reason)}</div>`;
+        html += `</div>`;
       }
     }
 

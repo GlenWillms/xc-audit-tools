@@ -238,6 +238,16 @@
   letter-spacing: 0.3px;
 }
 
+/* Informational findings (not in baseline, policy comparison) */
+.xc-audit-issue-info {
+  border-left: 3px solid #0d6efd;
+  padding-left: 8px;
+}
+
+.xc-audit-issue-info .xc-audit-issue-path {
+  color: #084298;
+}
+
 /* Optional/recommended checks */
 .xc-audit-issue-optional {
   border-left: 3px solid #0d6efd;

@@ -496,6 +496,13 @@
     return tierLabels[checkPlan] || planLabels[checkPlan] || null;
   }
 
+  function buildExplanationHtml(explanation) {
+    if (!explanation) return '';
+    let html = `<div class="xc-audit-reason">${escapeHtml(explanation.reason)}</div>`;
+    if (explanation.next_step) html += `<div class="xc-audit-fix">${escapeHtml(explanation.next_step)}</div>`;
+    return html;
+  }
+
   function buildDiffHtml(d, checks, planCtx) {
     const check = resolveCheck(checks, d.path);
     const displayName = check?.label || d.path;
@@ -517,12 +524,7 @@
       html += `<div class="xc-audit-issue-detail">Expected: <code>${escapeHtml(fmt(d.expected))}</code></div>`;
       html += `<div class="xc-audit-issue-detail">Found: <code>${escapeHtml(fmt(d.found))}</code></div>`;
     }
-    if (d.explanation) {
-      html += `<div class="xc-audit-reason">${escapeHtml(d.explanation.reason)}</div>`;
-      if (d.explanation.next_step) {
-        html += `<div class="xc-audit-fix">${escapeHtml(d.explanation.next_step)}</div>`;
-      }
-    }
+    html += buildExplanationHtml(d.explanation);
     html += `</div>`;
     return html;
   }
@@ -583,7 +585,10 @@
               const tag = planTagLabel(o.plan || check?.plan);
               html += `<span class="xc-audit-unavailable-tag"${tooltip ? ` data-tooltip="${escapeHtml(tooltip)}"` : ''}>${escapeHtml(label)} — ${tag}</span>`;
             } else if (o.overrideStatus === 'not_in_baseline') {
-              html += `<span class="xc-audit-info-tag"${tooltip ? ` data-tooltip="${escapeHtml(tooltip)}"` : ''}>${escapeHtml(label)} — not in baseline</span>`;
+              html += `<div class="xc-audit-issue xc-audit-issue-info">`;
+              html += `<div class="xc-audit-issue-path"${tooltip ? ` data-tooltip="${escapeHtml(tooltip)}"` : ''}>${escapeHtml(label)} — not in baseline</div>`;
+              html += buildExplanationHtml(o.explanation);
+              html += `</div>`;
             } else {
               html += `<span class="xc-audit-passed-tag"${tooltip ? ` data-tooltip="${escapeHtml(tooltip)}"` : ''}>${escapeHtml(label)} — via ${escapeHtml(result.baselineLb)}</span>`;
             }
@@ -619,7 +624,16 @@
           if (cmp.match) {
             html += `<span class="xc-audit-passed-tag">Active service policies match ${escapeHtml(cmp.baselineSource)}</span>`;
           } else {
-            html += `<span class="xc-audit-info-tag">Active service policies differ from ${escapeHtml(cmp.baselineSource)}</span>`;
+            html += `<div class="xc-audit-issue xc-audit-issue-info">`;
+            html += `<div class="xc-audit-issue-path">Active service policies differ from ${escapeHtml(cmp.baselineSource)}</div>`;
+            if (cmp.missing?.length) {
+              html += `<div class="xc-audit-issue-detail">Missing: ${cmp.missing.map((k) => `<code>${escapeHtml(k)}</code>`).join(', ')}</div>`;
+            }
+            if (cmp.extra?.length) {
+              html += `<div class="xc-audit-issue-detail">Not in ${escapeHtml(cmp.baselineSource)}: ${cmp.extra.map((k) => `<code>${escapeHtml(k)}</code>`).join(', ')}</div>`;
+            }
+            html += buildExplanationHtml(cmp.explanation);
+            html += `</div>`;
           }
         }
 
