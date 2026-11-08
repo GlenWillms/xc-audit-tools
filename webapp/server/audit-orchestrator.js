@@ -301,7 +301,7 @@ export async function auditNamespace(client, namespace, tenantConfig, progress) 
   }
 
   if (namespace !== 'default' && policies && defaultPolicies) {
-    const policyComparison = { ...comparePolicies(policies, defaultPolicies), baselineSource: 'default namespace' };
+    const policyComparison = comparePolicies(policies, defaultPolicies, 'default namespace');
     for (const lbResult of results.loadBalancers) {
       lbResult.policyComparison = policyComparison;
     }

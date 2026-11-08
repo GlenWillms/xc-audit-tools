@@ -375,7 +375,7 @@ async function handleRunAudit({ tenant, namespace, managedTenant, policies, defa
   const baselinePolicies = nsOverride || defaultPolicies;
   if ((settings?.comparePolicyToDefault !== false) && namespace !== 'default' && policies && baselinePolicies) {
     const baselineSource = nsOverride ? 'saved baseline' : 'default namespace';
-    const policyComparison = { ...comparePolicies(policies, baselinePolicies), baselineSource };
+    const policyComparison = comparePolicies(policies, baselinePolicies, baselineSource);
     for (const lbResult of results.loadBalancers) {
       lbResult.policyComparison = policyComparison;
     }
