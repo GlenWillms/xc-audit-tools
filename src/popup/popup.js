@@ -65,11 +65,26 @@ document.addEventListener('DOMContentLoaded', async () => {
   statusText.textContent = 'Loading...';
   statusIcon.className = 'icon gray';
 
-  document.getElementById('reAudit').addEventListener('click', () => {
+  document.getElementById('reAudit').addEventListener('click', async () => {
     statusText.textContent = 'Re-auditing...';
     statusIcon.className = 'icon gray';
     resultsEl.style.display = 'none';
-    chrome.tabs.sendMessage(tab.id, { type: 'TRIGGER_REAUDIT' }).catch(() => {});
+    try {
+      await chrome.tabs.sendMessage(tab.id, { type: 'TRIGGER_REAUDIT' });
+    } catch {
+      // The tab's content script is gone (e.g. the extension was reloaded): re-inject and retry
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['src/lib/url-parser.js', 'src/content/content-script.js'],
+        });
+        await chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: ['src/content/content-style.css'] });
+        await chrome.tabs.sendMessage(tab.id, { type: 'TRIGGER_REAUDIT' });
+      } catch {
+        statusIcon.className = 'icon red';
+        statusText.textContent = 'Could not reach the XC tab. Refresh the page and try again.';
+      }
+    }
   });
 
   const { auditCache } = await chrome.storage.session.get('auditCache');
@@ -85,17 +100,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   const cacheKey = managedTenant ? `${tenant}/${managedTenant}/${namespace}` : `${tenant}/${namespace}`;
   const cached = auditCache?.[cacheKey];
 
+  // Always listen, so results from a re-audit or a still-running audit replace what's shown
+  chrome.storage.session.onChanged.addListener((changes) => {
+    if (!changes.auditCache) return;
+    const entry = changes.auditCache.newValue?.[cacheKey];
+    if (entry) renderResults(cacheToResults(entry));
+  });
+
   if (cached) {
     renderResults(cacheToResults(cached));
   } else {
     statusIcon.className = 'icon gray';
     statusText.textContent = 'Audit in progress...';
-
-    chrome.storage.session.onChanged.addListener((changes) => {
-      if (!changes.auditCache) return;
-      const entry = changes.auditCache.newValue?.[cacheKey];
-      if (entry) renderResults(cacheToResults(entry));
-    });
   }
 
   function fmt(val) {
@@ -341,6 +357,12 @@ document.addEventListener('DOMContentLoaded', async () => {
               li.className = 'diff-item diff-info';
               if (check?.description) li.dataset.tooltip = check.description;
               li.textContent = `${label} — not in baseline`;
+              if (o.explanation) {
+                const reason = document.createElement('div');
+                reason.className = 'diff-reason';
+                reason.textContent = o.explanation.reason;
+                li.appendChild(reason);
+              }
             } else {
               li.className = 'diff-item diff-pass';
               if (check?.description) li.dataset.tooltip = check.description;
@@ -389,6 +411,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else {
               li.className = 'diff-item diff-info';
               li.textContent = `Active service policies differ from ${cmp.baselineSource}`;
+              const details = [];
+              if (cmp.missing?.length) details.push(`Missing: ${cmp.missing.join(', ')}`);
+              if (cmp.extra?.length) details.push(`Not in ${cmp.baselineSource}: ${cmp.extra.join(', ')}`);
+              if (cmp.explanation) details.push(cmp.explanation.reason);
+              for (const text of details) {
+                const reason = document.createElement('div');
+                reason.className = 'diff-reason';
+                reason.textContent = text;
+                li.appendChild(reason);
+              }
             }
             list.appendChild(li);
           }
