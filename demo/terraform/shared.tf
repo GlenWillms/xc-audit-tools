@@ -64,6 +64,23 @@ resource "volterra_api_definition" "httpbin" {
 }
 
 # -----------------------------------------------------------------------------
+# JWT Validation key set (public key only; the demo never issues tokens)
+# -----------------------------------------------------------------------------
+
+locals {
+  demo_jwks = jsonencode({
+    keys = [{
+      kty = "RSA"
+      use = "sig"
+      alg = "RS256"
+      kid = "xc-audit-demo"
+      e   = "AQAB"
+      n   = "u7QotqIyLScG76ubFHSNXsXSnyGfNRgVKZTW4IXSREcipGiaTX4Rv633a3XiELQSGAO8UPjx-TCY28jdzItAg5XGQV1L95o5PA772YNirzfcdlAR84fhmGdkm3Mh5ZnubDezf23bBZE2vQvtLpgxA8-jeEBKw0gJwPqYhjJ3Lhgcrvsqq0zI1f2f8_KESmkp1b6Sh5UyW4JmohIf3-5Qyjz-woPYKdhTnrmCTDDhpp8P9Q5fQc0oGf6f9RI6RXhKRZRO-IpmW-QJkeVOqT6-y44IdKP4nB19a2KFxY8fq_UR-puaixidYsqZZ27cSFzxxJwJU1YLlWqWxlJwUyqhIQ"
+    }]
+  })
+}
+
+# -----------------------------------------------------------------------------
 # App Firewalls
 # -----------------------------------------------------------------------------
 
