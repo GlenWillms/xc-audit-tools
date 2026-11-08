@@ -2,6 +2,25 @@ function isPlainObject(val) {
   return val !== null && typeof val === 'object' && !Array.isArray(val);
 }
 
+// Settings XC applies when the LB spec leaves them unset. An unset field is
+// the platform default, not a missing feature, so audit it as that default.
+const PLATFORM_DEFAULTS = {
+  l7_ddos_protection: {
+    mitigation_block: {},
+    default_rps_threshold: {},
+    clientside_action_none: {},
+    ddos_policy_none: {},
+  },
+};
+
+function withPlatformDefaults(spec) {
+  const result = { ...spec };
+  for (const [key, val] of Object.entries(PLATFORM_DEFAULTS)) {
+    if (result[key] == null) result[key] = val;
+  }
+  return result;
+}
+
 export function findDiffs(current, baseline, path = 'spec') {
   const issues = [];
 
@@ -354,7 +373,7 @@ export function runFullAudit(lbConfigs, policyConfig, baseline, explanations, ex
       for (const [k, v] of Object.entries(filteredSpec)) {
         if (!k.startsWith('__inspector__')) diffSpec[k] = v;
       }
-      const currentSpec = lb.spec || {};
+      const currentSpec = withPlatformDefaults(lb.spec || {});
       const diffs = findDiffs(currentSpec, diffSpec, 'spec');
 
       const skippedKeys = new Set(skipped.map((s) => s.key));
@@ -477,7 +496,7 @@ export function applyBaselineLbOverrides(results, lbConfigs, baselineLbConfigs, 
     const blb = baselineLbConfigs[baselineLbName];
     if (!blb) return null;
 
-    const blbSpec = blb.spec || {};
+    const blbSpec = withPlatformDefaults(blb.spec || {});
     const blbDiffs = findDiffs(blbSpec, diffSpec, 'spec');
     const failedPaths = new Set(blbDiffs.map((d) => d.path));
 
